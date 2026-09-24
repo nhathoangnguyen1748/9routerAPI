@@ -101,3 +101,6 @@ graphify-out/*
 .start-dev.ps1
 start-dev-silent.cjs
 debug.log
+backup-9router.json
+backup*.json
+*.backup.json
