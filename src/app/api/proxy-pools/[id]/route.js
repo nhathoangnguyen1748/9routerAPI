@@ -38,8 +38,12 @@ function normalizeProxyPoolUpdate(body = {}) {
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "type")) {
-    const validTypes = ["http", "vercel", "cloudflare"];
+    const validTypes = ["http", "vercel", "cloudflare", "deno"];
     updates.type = validTypes.includes(body?.type) ? body.type : "http";
+  } else if (updates.proxyUrl) {
+    if (updates.proxyUrl.includes("workers.dev")) updates.type = "cloudflare";
+    else if (updates.proxyUrl.includes("vercel.app")) updates.type = "vercel";
+    else if (updates.proxyUrl.includes("deno.dev") || updates.proxyUrl.includes("deno.net")) updates.type = "deno";
   }
 
   return { updates };

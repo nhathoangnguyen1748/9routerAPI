@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
-import { Badge, Button, Card, CardSkeleton, Input, Modal, Toggle, ConfirmModal } from "@/shared/components";
+import { Badge, Button, Card, CardSkeleton, Input, Modal, Toggle, ConfirmModal, Select } from "@/shared/components";
 import { useNotificationStore } from "@/store/notificationStore";
 
 function getStatusVariant(status) {
@@ -24,6 +24,7 @@ function normalizeFormData(data = {}) {
     noProxy: data.noProxy || "",
     isActive: data.isActive !== false,
     strictProxy: data.strictProxy === true,
+    type: data.type || (data.proxyUrl?.includes("workers.dev") ? "cloudflare" : data.proxyUrl?.includes("vercel.app") ? "vercel" : data.proxyUrl?.includes("deno") ? "deno" : "http"),
   };
 }
 
@@ -112,6 +113,7 @@ export default function ProxyPoolsPage() {
       noProxy: formData.noProxy.trim(),
       isActive: formData.isActive === true,
       strictProxy: formData.strictProxy === true,
+      type: formData.type || (formData.proxyUrl.includes("workers.dev") ? "cloudflare" : formData.proxyUrl.includes("vercel.app") ? "vercel" : formData.proxyUrl.includes("deno") ? "deno" : "http"),
     };
 
     if (!payload.name || !payload.proxyUrl) return;
@@ -996,10 +998,29 @@ export default function ProxyPoolsPage() {
             onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
             placeholder="Office Proxy"
           />
+          <Select
+            label="Proxy Type"
+            value={formData.type || "http"}
+            onChange={(e) => setFormData((prev) => ({ ...prev, type: e.target.value }))}
+            options={[
+              { value: "cloudflare", label: "Cloudflare Relay (Worker)" },
+              { value: "vercel", label: "Vercel Relay" },
+              { value: "deno", label: "Deno Relay" },
+              { value: "http", label: "Standard Forward Proxy (HTTP/HTTPS/SOCKS5)" },
+            ]}
+            hint="For Cloudflare Worker (*.workers.dev), select Cloudflare Relay"
+          />
           <Input
             label="Proxy URL"
             value={formData.proxyUrl}
-            onChange={(e) => setFormData((prev) => ({ ...prev, proxyUrl: e.target.value }))}
+            onChange={(e) => {
+              const val = e.target.value;
+              setFormData((prev) => ({
+                ...prev,
+                proxyUrl: val,
+                type: val.includes("workers.dev") ? "cloudflare" : val.includes("vercel.app") ? "vercel" : val.includes("deno") ? "deno" : prev.type,
+              }));
+            }}
             placeholder="http://127.0.0.1:7897"
           />
           <Input

@@ -15,7 +15,13 @@ function normalizeProxyPoolInput(body = {}) {
   const noProxy = typeof body?.noProxy === "string" ? body.noProxy.trim() : "";
   const isActive = body?.isActive === undefined ? true : body.isActive === true;
   const strictProxy = body?.strictProxy === true;
-  const type = VALID_PROXY_TYPES.includes(body?.type) ? body.type : "http";
+  let type = VALID_PROXY_TYPES.includes(body?.type) ? body.type : null;
+  if (!type) {
+    if (proxyUrl.includes("workers.dev")) type = "cloudflare";
+    else if (proxyUrl.includes("vercel.app")) type = "vercel";
+    else if (proxyUrl.includes("deno.dev") || proxyUrl.includes("deno.net")) type = "deno";
+    else type = "http";
+  }
 
   if (!name) {
     return { error: "Name is required" };
