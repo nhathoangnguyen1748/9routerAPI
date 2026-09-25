@@ -19,4 +19,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: INITIAL_PASSWORD
-        sync: false
+        value: admin123456
+      - key: ANTIGRAVITY_BASE_URL
+        value: https://9router-proxy.nhathoangnguyen1748.workers.dev
+
