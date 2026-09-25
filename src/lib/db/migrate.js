@@ -289,6 +289,66 @@ export async function runMigrationOnce(adapter) {
     return;
   }
 
+  // 4. Auto-seed backup if DB has 0 provider connections (e.g. fresh Render container or after spin-down)
+  try {
+    const connRow = adapter.get("SELECT COUNT(*) as c FROM providerConnections");
+    const connCount = connRow?.c ?? 0;
+    if (connCount === 0) {
+      let seedData = null;
+      let seedSource = null;
+
+      // Check env var ROUTER_SEED_DATA (raw JSON, base64, or gzip+base64)
+      if (process.env.ROUTER_SEED_DATA) {
+        try {
+          const raw = process.env.ROUTER_SEED_DATA.trim();
+          if (raw.startsWith("{")) {
+            seedData = JSON.parse(raw);
+            seedSource = "env:ROUTER_SEED_DATA (json)";
+          } else {
+            const buf = Buffer.from(raw, "base64");
+            if (buf[0] === 0x1f && buf[1] === 0x8b) {
+              const { gunzipSync } = await import("node:zlib");
+              seedData = JSON.parse(gunzipSync(buf).toString("utf-8"));
+              seedSource = "env:ROUTER_SEED_DATA (gzip+base64)";
+            } else {
+              seedData = JSON.parse(buf.toString("utf-8"));
+              seedSource = "env:ROUTER_SEED_DATA (base64)";
+            }
+          }
+        } catch (err) {
+          console.warn(`[DB][AutoSeed] Failed parsing ROUTER_SEED_DATA env:`, err.message);
+        }
+      }
+
+      // Fallback to local seed files
+      if (!seedData) {
+        const candidateFiles = [
+          path.join(process.cwd(), "backup-seed.json"),
+          path.join(process.cwd(), "backup-9router.json"),
+          path.join(DB_DIR, "backup-seed.json"),
+        ];
+        for (const file of candidateFiles) {
+          if (fs.existsSync(file)) {
+            try {
+              seedData = JSON.parse(fs.readFileSync(file, "utf-8"));
+              seedSource = file;
+              break;
+            } catch {}
+          }
+        }
+      }
+
+      if (seedData && (seedData.providerConnections?.length > 0 || seedData.apiKeys?.length > 0)) {
+        console.log(`[DB][AutoSeed] Seeding database from ${seedSource}...`);
+        const { importDb } = await import("./index.js");
+        await importDb(seedData);
+        console.log(`[DB][AutoSeed] Auto-seed complete: ${(seedData.providerConnections || []).length} accounts, ${(seedData.apiKeys || []).length} API keys.`);
+      }
+    }
+  } catch (seedErr) {
+    console.warn(`[DB][AutoSeed] Auto-seed failed (continuing):`, seedErr.message);
+  }
+
   // Track app version for informational purposes only. App version bumps no
   // longer trigger a DB backup — only real schema changes (SCHEMA_VERSION) do.
   const newVer = getAppVersion();
