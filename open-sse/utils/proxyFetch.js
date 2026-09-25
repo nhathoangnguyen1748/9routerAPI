@@ -298,13 +298,27 @@ export async function proxyAwareFetch(url, options = {}, proxyOptions = null) {
   const vercelRelayUrl = normalizeString(proxyOptions?.vercelRelayUrl);
   if (vercelRelayUrl) {
     const parsed = new URL(targetUrl);
+    let relayTarget = `${parsed.protocol}//${parsed.host}`;
+    let relayPath = `${parsed.pathname}${parsed.search}`;
+
+    try {
+      const relayWorkerHost = new URL(vercelRelayUrl).host;
+      if (parsed.host === relayWorkerHost) {
+        if (relayPath.includes("v1internal:") || relayPath.includes("CodeAssist")) {
+          relayTarget = "https://daily-cloudcode-pa.googleapis.com";
+        } else {
+          relayTarget = "https://generativelanguage.googleapis.com";
+        }
+      }
+    } catch { }
+
     const baseHeaders = options.headers instanceof Headers
       ? Object.fromEntries(options.headers.entries())
       : { ...(options.headers || {}) };
     const relayHeaders = {
       ...baseHeaders,
-      "x-relay-target": `${parsed.protocol}//${parsed.host}`,
-      "x-relay-path": `${parsed.pathname}${parsed.search}`,
+      "x-relay-target": relayTarget,
+      "x-relay-path": relayPath,
     };
     return originalFetch(vercelRelayUrl, { ...options, headers: relayHeaders });
   }

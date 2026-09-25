@@ -7,28 +7,55 @@ export default {
   async fetch(request, env, ctx) {
     const target = request.headers.get("x-relay-target");
     const relayPath = request.headers.get("x-relay-path") || "/";
-    
-    if (!target) {
-      return new Response(JSON.stringify({ error: "Missing x-relay-target header" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
-      });
+    const url = new URL(request.url);
+
+    // 1. Health check for direct browser visits (GET /)
+    if (!target && (url.pathname === "/" || url.pathname === "")) {
+      return new Response(
+        JSON.stringify({
+          status: "active",
+          message: "9router Cloudflare Relay Worker is running successfully!",
+          timestamp: new Date().toISOString(),
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "access-control-allow-origin": "*",
+          },
+        }
+      );
     }
 
-    const targetUrl = target.replace(/\\/$/, "") + relayPath;
+    // 2. Resolve target URL
+    let targetUrl;
+    if (target && !target.includes("workers.dev")) {
+      targetUrl = target.replace(/\\/$/, "") + relayPath;
+    } else {
+      // Smart fallback: if called directly or self-targeted without x-relay-target
+      const path = target ? relayPath : (url.pathname + url.search);
+      if (path.includes("v1internal:") || path.includes("CodeAssist")) {
+        targetUrl = "https://daily-cloudcode-pa.googleapis.com" + (path.startsWith("/") ? path : "/" + path);
+      } else {
+        targetUrl = "https://generativelanguage.googleapis.com" + (path.startsWith("/") ? path : "/" + path);
+      }
+    }
+
+    const newHeaders = new Headers(request.headers);
+    newHeaders.delete("x-relay-target");
+    newHeaders.delete("x-relay-path");
+    newHeaders.delete("host");
+
     const newRequestInit = {
       method: request.method,
-      headers: new Headers(request.headers),
+      headers: newHeaders,
+      redirect: "follow",
     };
 
     if (request.method !== "GET" && request.method !== "HEAD") {
       newRequestInit.body = request.body;
       newRequestInit.duplex = "half";
     }
-
-    newRequestInit.headers.delete("x-relay-target");
-    newRequestInit.headers.delete("x-relay-path");
-    newRequestInit.headers.delete("host");
 
     try {
       const response = await fetch(targetUrl, newRequestInit);

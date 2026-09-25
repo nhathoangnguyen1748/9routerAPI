@@ -1,4 +1,4 @@
-import { getProxyPoolById } from "@/models";
+import { getProxyPoolById, getProxyPools } from "@/models";
 
 // Safely normalize any value into a trimmed string.
 function normalizeString(value) {
@@ -72,10 +72,23 @@ export async function resolveConnectionProxyConfig(
     );
 
     // "__none__" means explicitly disabled
-    const proxyPoolId =
+    let proxyPoolId =
       proxyPoolIdRaw === "__none__" ? "" : proxyPoolIdRaw;
 
     const legacy = normalizeLegacyProxy(providerSpecificData);
+
+    // Auto-fallback: if not explicitly configured or disabled, pick the active proxy pool
+    if (!proxyPoolId && proxyPoolIdRaw !== "__none__" && !legacy.connectionProxyEnabled) {
+      try {
+        const activePools = await getProxyPools({ isActive: true });
+        const defaultPool = activePools?.find((p) => p.isActive === true && p.proxyUrl);
+        if (defaultPool) {
+          proxyPoolId = defaultPool.id;
+        }
+      } catch {
+        // Ignore fallback errors
+      }
+    }
 
     /**
      * -----------------------------
