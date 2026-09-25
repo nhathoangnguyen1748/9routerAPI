@@ -6,19 +6,44 @@ const VERCEL_API = "https://api.vercel.com";
 // Relay function source code deployed to Vercel
 // Forwards requests to target URL specified in x-relay-target header
 const RELAY_FUNCTION_CODE = `
-export const config = { runtime: "edge" };
+export const config = { runtime: "edge", regions: ["iad1"] };
 
 export default async function handler(req) {
   const target = req.headers.get("x-relay-target");
   const relayPath = req.headers.get("x-relay-path") || "/";
-  if (!target) {
-    return new Response(JSON.stringify({ error: "Missing x-relay-target header" }), {
-      status: 400,
-      headers: { "content-type": "application/json" },
-    });
+  const url = new URL(req.url);
+
+  // 1. Healthcheck when accessed directly via browser (GET /)
+  if (!target && (url.pathname === "/" || url.pathname === "")) {
+    return new Response(
+      JSON.stringify({
+        status: "active",
+        message: "9router Vercel Relay is running successfully (US Region - iad1)!",
+        timestamp: new Date().toISOString(),
+      }),
+      {
+        status: 200,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "access-control-allow-origin": "*",
+        },
+      }
+    );
   }
 
-  const targetUrl = target.replace(/\\/$/, "") + relayPath;
+  // 2. Resolve target URL
+  let targetUrl;
+  if (target && !target.includes("vercel.app")) {
+    targetUrl = target.replace(/\\/$/, "") + relayPath;
+  } else {
+    // Smart fallback if called directly
+    const path = target ? relayPath : (url.pathname + url.search);
+    if (path.includes("v1internal:") || path.includes("CodeAssist")) {
+      targetUrl = "https://daily-cloudcode-pa.googleapis.com" + (path.startsWith("/") ? path : "/" + path);
+    } else {
+      targetUrl = "https://generativelanguage.googleapis.com" + (path.startsWith("/") ? path : "/" + path);
+    }
+  }
 
   const rawHeaders = {};
   for (const [k, v] of req.headers.entries()) rawHeaders[k] = v;
@@ -88,6 +113,7 @@ export async function POST(request) {
           {
             file: "vercel.json",
             data: JSON.stringify({
+              regions: ["iad1"],
               rewrites: [{ source: "/(.*)", destination: "/api/relay" }],
             }),
           },
