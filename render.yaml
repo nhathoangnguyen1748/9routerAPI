@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: 9router
+    runtime: node
+    plan: starter # Đổi thành free nếu dùng gói miễn phí (lưu ý gói free không gắn được disk)
+    region: singapore # Khu vực Singapore ping về Việt Nam nhanh nhất (~30ms)
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/version
+    envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
+      - key: NODE_ENV
+        value: production
+      - key: ENABLE_REQUEST_LOGS
+        value: "false"
+      - key: OBSERVABILITY_ENABLED
+        value: "false"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: INITIAL_PASSWORD
+        sync: false
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: 9router-data
+      mountPath: /var/data
+      sizeGB: 1

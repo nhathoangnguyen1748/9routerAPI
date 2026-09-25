@@ -133,7 +133,21 @@ if (require.main === module) {
     // Repo checkout has no standalone build next to us. `next start` builds its HTTP
     // server in-process, so the wrapper above still sanitizes every request.
     const nextBin = require.resolve("next/dist/bin/next");
-    process.argv = [process.argv[0], nextBin, "start", ...process.argv.slice(2)];
+    const args = [...process.argv.slice(2)];
+    if (process.env.PORT) {
+      const portIdx = args.indexOf("--port");
+      if (portIdx !== -1 && args[portIdx + 1]) {
+        args[portIdx + 1] = String(process.env.PORT);
+      } else {
+        const pIdx = args.indexOf("-p");
+        if (pIdx !== -1 && args[pIdx + 1]) {
+          args[pIdx + 1] = String(process.env.PORT);
+        } else {
+          args.push("--port", String(process.env.PORT));
+        }
+      }
+    }
+    process.argv = [process.argv[0], nextBin, "start", ...args];
     require(nextBin);
   }
 }

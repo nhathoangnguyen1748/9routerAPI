@@ -19,12 +19,32 @@ export async function createSqlJsAdapter(filePath) {
 
   let dirty = false;
   let saveTimer = null;
-  const SAVE_DEBOUNCE_MS = 100;
+  let isWriting = false;
+  const SAVE_DEBOUNCE_MS = 500;
 
-  function persist() {
-    const data = db.export();
-    fs.writeFileSync(filePath, Buffer.from(data));
-    dirty = false;
+  function persistSync() {
+    try {
+      const data = db.export();
+      fs.writeFileSync(filePath, Buffer.from(data));
+      dirty = false;
+    } catch (e) {
+      console.error("[sqljs] sync save failed:", e);
+    }
+  }
+
+  async function persist() {
+    if (isWriting) return;
+    isWriting = true;
+    try {
+      const data = db.export();
+      dirty = false;
+      await fs.promises.writeFile(filePath, Buffer.from(data));
+    } catch (e) {
+      console.error("[sqljs] async save failed:", e);
+    } finally {
+      isWriting = false;
+      if (dirty) scheduleSave();
+    }
   }
 
   function scheduleSave() {
@@ -33,7 +53,7 @@ export async function createSqlJsAdapter(filePath) {
     saveTimer = setTimeout(() => {
       saveTimer = null;
       if (dirty) {
-        try { persist(); } catch (e) { console.error("[sqljs] save failed:", e); }
+        persist().catch((e) => console.error("[sqljs] save failed:", e));
       }
     }, SAVE_DEBOUNCE_MS);
   }
@@ -101,12 +121,12 @@ export async function createSqlJsAdapter(filePath) {
 
   function close() {
     if (saveTimer) clearTimeout(saveTimer);
-    if (dirty) persist();
+    if (dirty) persistSync();
     db.close();
   }
 
   // Flush on shutdown
-  const flush = () => { if (dirty) try { persist(); } catch {} };
+  const flush = () => { if (dirty) persistSync(); };
   process.on("beforeExit", flush);
   process.on("SIGINT", flush);
   process.on("SIGTERM", flush);
