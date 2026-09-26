@@ -14,6 +14,19 @@ export { SSE_DONE, SSE_HEADERS, SSE_HEADERS_NO_BUFFER };
 // sharedEncoder is stateless — safe to share across streams
 const sharedEncoder = new TextEncoder();
 
+// Memory safety caps: limit memory retained for audit logging and unbuffered lines
+export const MAX_ACCUMULATED_CHARS = 64 * 1024; // 64KB cap for logged content
+export const MAX_STREAM_BUFFER_SIZE = 1024 * 1024; // 1MB cap for runaway SSE line buffer
+
+function appendWithCap(current, str, max = MAX_ACCUMULATED_CHARS) {
+  if (!str) return current;
+  if (current.length >= max) return current;
+  if (current.length + str.length >= max) {
+    return current + str.slice(0, max - current.length) + "\n... [stream truncated for logging]";
+  }
+  return current + str;
+}
+
 /**
  * Stream modes
  */
@@ -122,6 +135,12 @@ export function createSSEStream(options = {}) {
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
 
+      // Buffer cap: prevent runaway buffer when upstream omits newlines
+      if (buffer.length > MAX_STREAM_BUFFER_SIZE) {
+        console.warn("[StreamHandler] Stream line buffer exceeded 1MB without newline. Truncating to avoid OOM.");
+        buffer = buffer.slice(-128 * 1024);
+      }
+
       for (const line of lines) {
         const trimmed = line.trim();
         if (isDebugEnabled && trimmed) {
@@ -193,11 +212,11 @@ export function createSSEStream(options = {}) {
               const reasoning = delta?.reasoning_content;
               if (content && typeof content === "string") {
                 totalContentLength += content.length;
-                accumulatedContent += content;
+                accumulatedContent = appendWithCap(accumulatedContent, content);
               }
               if (reasoning && typeof reasoning === "string") {
                 totalContentLength += reasoning.length;
-                accumulatedThinking += reasoning;
+                accumulatedThinking = appendWithCap(accumulatedThinking, reasoning);
               }
 
               const extracted = extractUsage(parsed);
@@ -288,23 +307,23 @@ export function createSSEStream(options = {}) {
         // Claude format - content
         if (parsed.delta?.text) {
           totalContentLength += parsed.delta.text.length;
-          accumulatedContent += parsed.delta.text;
+          accumulatedContent = appendWithCap(accumulatedContent, parsed.delta.text);
         }
         // Claude format - thinking
         if (parsed.delta?.thinking) {
           totalContentLength += parsed.delta.thinking.length;
-          accumulatedThinking += parsed.delta.thinking;
+          accumulatedThinking = appendWithCap(accumulatedThinking, parsed.delta.thinking);
         }
         
         // OpenAI format - content
         if (parsed.choices?.[0]?.delta?.content) {
           totalContentLength += parsed.choices[0].delta.content.length;
-          accumulatedContent += parsed.choices[0].delta.content;
+          accumulatedContent = appendWithCap(accumulatedContent, parsed.choices[0].delta.content);
         }
         // OpenAI format - reasoning
         if (parsed.choices?.[0]?.delta?.reasoning_content) {
           totalContentLength += parsed.choices[0].delta.reasoning_content.length;
-          accumulatedThinking += parsed.choices[0].delta.reasoning_content;
+          accumulatedThinking = appendWithCap(accumulatedThinking, parsed.choices[0].delta.reasoning_content);
         }
         
         // Gemini format
@@ -314,9 +333,9 @@ export function createSSEStream(options = {}) {
               totalContentLength += part.text.length;
               // Check if this is thinking content
               if (part.thought === true) {
-                accumulatedThinking += part.text;
+                accumulatedThinking = appendWithCap(accumulatedThinking, part.text);
               } else {
-                accumulatedContent += part.text;
+                accumulatedContent = appendWithCap(accumulatedContent, part.text);
               }
             }
           }

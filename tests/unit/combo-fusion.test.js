@@ -213,4 +213,30 @@ describe("fusion combo", () => {
     // Flattened tool_result
     expect(panelBody.messages[2].content).toBe("[Tool result: done]");
   });
+
+  it("aborts straggler panel requests when quorum finishes to prevent zombie calls", async () => {
+    const abortedSignals = [];
+    const handleSingleModel = vi.fn(async (body, model, isPanel, signal) => {
+      if (model === "p/slow") {
+        if (signal) {
+          signal.addEventListener("abort", () => abortedSignals.push(model));
+        }
+        return okResponse("slow", { delayMs: 5000 });
+      }
+      if (model === "p/judge") return okResponse("FINAL");
+      return okResponse(`fast-${model}`);
+    });
+
+    await handleFusionChat({
+      body: { messages: [{ role: "user", content: "Q" }] },
+      models: ["p/x", "p/y", "p/slow"],
+      handleSingleModel,
+      log,
+      judgeModel: "p/judge",
+      tuning: { minPanel: 2, stragglerGraceMs: 30, panelHardTimeoutMs: 10000 },
+    });
+
+    expect(abortedSignals).toContain("p/slow");
+  });
 });
+
