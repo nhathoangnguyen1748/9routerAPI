@@ -38,7 +38,7 @@ function normalizeProxyPoolUpdate(body = {}) {
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "type")) {
-    const validTypes = ["http", "vercel", "cloudflare", "deno"];
+    const validTypes = ["http", "vercel", "cloudflare", "deno", "netlify"];
     updates.type = validTypes.includes(body?.type) ? body.type : "http";
   } else if (updates.proxyUrl) {
     if (updates.proxyUrl.includes("workers.dev")) updates.type = "cloudflare";
