@@ -70,8 +70,8 @@ export {
 } from "./repos/requestDetailsRepo.js";
 
 // Export/import full DB
-export async function exportDb() {
-  const db = await getAdapter();
+export async function exportDb(dbOverride = null) {
+  const db = dbOverride || (await getAdapter());
   const { exportSettings } = await import("./repos/settingsRepo.js");
 
   const out = {
@@ -95,11 +95,11 @@ export async function exportDb() {
   return out;
 }
 
-export async function importDb(payload) {
+export async function importDb(payload, dbOverride = null) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new Error("Invalid database payload");
   }
-  const db = await getAdapter();
+  const db = dbOverride || (await getAdapter());
 
   db.transaction(() => {
     // Wipe all tables (keep _meta)

@@ -341,7 +341,7 @@ export async function runMigrationOnce(adapter) {
       if (seedData && (seedData.providerConnections?.length > 0 || seedData.apiKeys?.length > 0)) {
         console.log(`[DB][AutoSeed] Seeding database from ${seedSource}...`);
         const { importDb } = await import("./index.js");
-        await importDb(seedData);
+        await importDb(seedData, adapter);
         console.log(`[DB][AutoSeed] Auto-seed complete: ${(seedData.providerConnections || []).length} accounts, ${(seedData.apiKeys || []).length} API keys.`);
       }
     }
