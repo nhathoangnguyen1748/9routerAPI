@@ -173,7 +173,8 @@ export async function importDb(payload, dbOverride = null) {
     }
   });
 
-  return await exportDb();
+  if (dbOverride) return null;
+  return await exportDb(db);
 }
 
 // Eager init helper (optional)
